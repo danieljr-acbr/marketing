@@ -32,16 +32,16 @@ SECOND = "#5a5f66"
 
 
 def edicao_mes_atual():
-    """Retorna 'mes de ano' em portugues, no fuso de Brasilia. Sem dependencia externa."""
+    """Retorna 'dia de mes' em portugues, no fuso de Brasilia. Sem dependencia externa."""
     from datetime import datetime
     try:
         from zoneinfo import ZoneInfo
         agora = datetime.now(ZoneInfo("America/Sao_Paulo"))
     except Exception:
-        agora = datetime.utcnow()  # fallback; diferenca de fuso so afeta a virada do mes
+        agora = datetime.utcnow()  # fallback; diferenca de fuso so afeta a virada do dia/mes
     meses = ["janeiro", "fevereiro", "marco", "abril", "maio", "junho",
              "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"]
-    return f"{meses[agora.month - 1]} de {agora.year}"
+    return f"{agora.day} de {meses[agora.month - 1]}"
 
 
 def limpa(texto, limite=160):
