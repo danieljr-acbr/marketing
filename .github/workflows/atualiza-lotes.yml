@@ -1,0 +1,52 @@
+name: Atualiza valores de lote (venda)
+
+# Roda SOMENTE manualmente, com formulario de valores.
+on:
+  workflow_dispatch:
+    inputs:
+      novo_valor_atual:
+        description: "Novo valor do lote atual (so o numero, ex.: 799)"
+        required: true
+        type: string
+      novo_valor_proximo:
+        description: "Valor do proximo lote (so o numero, ex.: 849)"
+        required: true
+        type: string
+      nova_data_virada:
+        description: "Nova data de virada (formato DD/MM/AAAA, ex.: 30/08/2026)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  atualizar-lotes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar o repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Atualizar valores de lote nos e-mails de venda
+        env:
+          NOVO_VALOR_ATUAL:   ${{ inputs.novo_valor_atual }}
+          NOVO_VALOR_PROXIMO: ${{ inputs.novo_valor_proximo }}
+          NOVA_DATA_VIRADA:   ${{ inputs.nova_data_virada }}
+        run: python scripts/atualiza_lotes.py
+
+      - name: Commit e push (se houver mudancas)
+        run: |
+          git config user.name "acbr-bot"
+          git config user.email "actions@users.noreply.github.com"
+          if [ -n "$(git status --porcelain)" ]; then
+            git add -A
+            git commit -m "Atualiza valores de lote (via workflow manual) [skip ci]"
+            git push
+          else
+            echo "Sem mudancas - nada a commitar."
+          fi
