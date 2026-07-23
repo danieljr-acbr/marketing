@@ -20,8 +20,8 @@ import feedparser
 
 # --- CONFIG: URLs dos feeds (preencha ou use as envs no repositorio) ---
 FEED_NOTICIAS = os.environ.get("RSS_FEED_NOTICIAS", "")  # vem do Environment secret RSS_FEED_NOTICIAS (nao fixar a chave aqui)
-FEED_PODCAST  = os.environ.get("RSS_FEED_PODCAST",  "https://anchor.fm/s/53cc5990/podcast/rss")
-YT_CHANNEL_ID = os.environ.get("YT_CHANNEL_ID", "UCUK2VZuC1cmJ2qJKVzVnZEg")
+FEED_PODCAST  = os.environ.get("RSS_FEED_PODCAST")  or "https://anchor.fm/s/53cc5990/podcast/rss"
+YT_CHANNEL_ID = os.environ.get("YT_CHANNEL_ID") or "UCUK2VZuC1cmJ2qJKVzVnZEg"
 FEED_VIDEO    = f"https://www.youtube.com/feeds/videos.xml?channel_id={YT_CHANNEL_ID}"
 
 GLOB_NEWSLETTER = "**/novidades-comunidade/**/*.html"

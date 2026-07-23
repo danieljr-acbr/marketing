@@ -1,0 +1,48 @@
+name: Atualiza conteudo da newsletter
+
+# Quando roda:
+on:
+  schedule:
+    - cron: "0 9 * * 1"     # toda segunda-feira, 09:00 UTC (06:00 em Brasilia)
+  workflow_dispatch: {}      # permite rodar manualmente pelo botao "Run workflow"
+
+permissions:
+  contents: write            # necessario para o Action poder fazer commit
+
+jobs:
+  atualizar:
+    runs-on: ubuntu-latest
+    # O secret RSS_FEED_NOTICIAS foi cadastrado dentro deste Environment.
+    # Sem esta linha, um Environment secret NAO fica disponivel para o job.
+    environment: "Noticias ACBr DJ"
+    steps:
+      - name: Baixar o repositorio
+        uses: actions/checkout@v7
+
+      - name: Configurar Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: pip install feedparser
+
+      - name: Atualizar conteudo nos templates (noticias + podcast + video)
+        env:
+          # Environment secrets (criptografados). Cadastrados dentro do Environment "Noticias ACBr DJ".
+          RSS_FEED_NOTICIAS: ${{ secrets.RSS_FEED_NOTICIAS }}
+          RSS_FEED_PODCAST:  ${{ secrets.RSS_FEED_PODCAST }}
+          YT_CHANNEL_ID:     ${{ secrets.YT_CHANNEL_ID }}
+        run: python scripts/atualiza_conteudo.py
+
+      - name: Commit e push (se houver mudancas)
+        run: |
+          git config user.name "acbr-bot"
+          git config user.email "actions@users.noreply.github.com"
+          if [ -n "$(git status --porcelain)" ]; then
+            git add -A
+            git commit -m "Atualiza conteudo da comunidade (RSS: noticias/podcast/video) [skip ci]"
+            git push
+          else
+            echo "Sem mudancas - nada a commitar."
+          fi
