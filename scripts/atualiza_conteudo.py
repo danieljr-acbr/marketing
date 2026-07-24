@@ -101,6 +101,17 @@ def substitui_bloco(conteudo, marca, novo_miolo):
     return antes + f"{ini}\n{novo_miolo}\n        {fim}" + depois, True
 
 
+def substitui_inline(conteudo, marca, novo_valor):
+    """Como substitui_bloco, mas sem quebras de linha - para campos dentro de uma unica linha
+    (ex.: a data no cabecalho). Os marcadores INICIO/FIM ficam no arquivo para a proxima
+    atualizacao poder trocar o valor de novo (o token puro *|...|* desaparece apos o 1o uso)."""
+    ini = f"<!-- {marca}:INICIO -->"
+    fim = f"<!-- {marca}:FIM -->"
+    padrao = re.compile(re.escape(ini) + r".*?" + re.escape(fim), re.DOTALL)
+    novo, n = padrao.subn(f"{ini}{novo_valor}{fim}", conteudo)
+    return novo, n > 0
+
+
 def main():
     noticias = parse(FEED_NOTICIAS, "noticias")
     podcast  = parse(FEED_PODCAST, "podcast")
@@ -123,8 +134,7 @@ def main():
         with open(caminho, encoding="utf-8") as f:
             c = f.read()
         original = c
-        # Mes atual (substitui o token literal, esteja onde estiver no cabecalho)
-        c = c.replace("*|EDICAO_MES|*", mes)
+        c, _ = substitui_inline(c, "EDICAO_MES", mes)
         if miolo_noticias:
             c, _ = substitui_bloco(c, "NOTICIAS", miolo_noticias)
         if miolo_podcast:
