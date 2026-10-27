@@ -3,14 +3,34 @@
 Uso:
     python scripts/valida_email.py caminho/email.html [--fix]
 
-Verifica:
+Detecta sozinho se o arquivo é uma PÁGINA COMPLETA (importação por URL
+do RD, com <html>/<head>/<body>) ou um BLOCO (fragmento para colar num
+bloco de HTML/código dentro de um template do RD) e aplica o
+checklist certo para cada caso — veja a skill rd-email-import para o
+checklist completo e o porquê de cada regra.
+
+Verifica sempre:
   - estrutura HTML (tags de tabela, td, a e p abertas/fechadas)
   - imagens: HTTP 200, formato real (bytes) x extensão, WebP disfarçado de .png/.jpg
     (o site diadoacbr.com.br entrega WebP e o Gmail perde a transparência)
   - imagens sem alt/width, imagens em data: URI (bloqueadas no Gmail)
   - links quebrados e links sem https
   - tamanho do HTML (Gmail corta acima de ~102 KB)
+
+Só em página completa:
   - meta color-scheme (evita logos invertidos no modo escuro)
+  - largura do card em %/auto no lugar de px fixo (a importação por URL
+    do RD mede a página numa viewport estreita e trava essa largura)
+
+Só em bloco:
+  - <html>/<head>/<body>/viewport sobrando (não fazem sentido num
+    fragmento — o template do RD já fornece isso)
+  - <center>/align="center" ausente (sem o wrapper de página, o card
+    alinha à esquerda em vez de centralizado)
+  - borda/border-radius no card externo (deve se fundir ao fundo do
+    template do RD, não aparecer como um cartão à parte)
+  - padding lateral grande (o bloco deve aproveitar quase toda a
+    largura disponível, ao contrário de uma página completa)
 
 Com --fix, as imagens WebP são convertidas para PNG em
 <pasta do e-mail>/img/<nome do e-mail>/ e o src passa a apontar para o
@@ -76,6 +96,94 @@ def formato(data):
     return "desconhecido"
 
 
+PAD_RE = re.compile(r"padding\s*:\s*(-?\d+)px(?:\s+(-?\d+)px)?(?:\s+(-?\d+)px)?(?:\s+(-?\d+)px)?", re.I)
+
+
+def padding_lateral(declaracao):
+    """Dado o valor de uma propriedade CSS padding (shorthand), devolve o
+    valor lateral (direita/esquerda) em px, seguindo as regras do CSS:
+    1 valor -> todos os lados; 2 ou 3 valores -> o 2º é a lateral; 4
+    valores -> o 2º (direita) é usado como referência."""
+    m = PAD_RE.search("padding:" + declaracao)
+    if not m:
+        return None
+    vals = [int(v) for v in m.groups() if v is not None]
+    return vals[1] if len(vals) >= 2 else vals[0]
+
+
+def achar_tabela_card(sem_comentarios):
+    """Acha a tag <table ...> do card do e-mail, não a tabela de fundo
+    full-bleed que envolve tudo. Nos templates deste repositório, essa
+    tabela de fundo é sempre width=100% sem max-width nem class="card";
+    o card em si costuma ter class="card" e/ou max-width no style. Na
+    ausência dos dois sinais, assume a 2ª tabela do documento (padrão:
+    fundo -> td align=center -> card) — ou a 1ª, se só houver uma
+    (como num bloco, que não tem tabela de fundo)."""
+    tabelas = re.findall(r"<table\b[^>]*>", sem_comentarios, re.I)
+    for t in tabelas:
+        if 'class="card"' in t.lower():
+            return t
+    for t in tabelas:
+        if "max-width" in t.lower():
+            return t
+    if len(tabelas) > 1:
+        return tabelas[1]
+    return tabelas[0] if tabelas else None
+
+
+def checa_bloco(html, sem_comentarios, erros, avisos):
+    """Checklist específico para um BLOCO (fragmento sem <html>/<head>/<body>,
+    pensado para colar num bloco de HTML customizado dentro de um
+    template do RD Station, em vez de importar a página inteira)."""
+    for tag in ("<html", "<head", "<body", 'name="viewport"'):
+        if tag in sem_comentarios.lower():
+            erros.append(f"bloco não deveria ter {tag.strip('<').strip()}: o template do RD já fornece isso")
+
+    if "<style" in sem_comentarios.lower():
+        avisos.append("bloco com <style>: o RD Station não confia em CSS no <head>/<style> na importação — prefira tudo inline (já é o padrão deste repositório)")
+
+    if "<center" not in sem_comentarios.lower():
+        avisos.append('sem <center>: sem o wrapper de página, o card tende a alinhar à esquerda em vez de centralizado no bloco do RD')
+
+    tag_externa = achar_tabela_card(sem_comentarios)
+    if tag_externa:
+        if 'align="center"' not in tag_externa.lower():
+            avisos.append('tabela externa sem align="center": some sem o <center> junto, o card pode alinhar à esquerda')
+        sm = re.search(r'style="([^"]*)"', tag_externa, re.I)
+        estilo = sm.group(1).lower() if sm else ""
+        if "border-radius" in estilo or re.search(r"border\s*:\s*[1-9]", estilo):
+            avisos.append("tabela externa do bloco com border/border-radius: o card deve se fundir ao fundo do template do RD, não aparecer como um cartão à parte")
+
+    laterais = []
+    for decl in re.findall(r'padding\s*:\s*[^;"]+', sem_comentarios, re.I):
+        lat = padding_lateral(decl[len("padding"):].lstrip(": "))
+        if lat is not None:
+            laterais.append(lat)
+    # >24px cobre folgas normais de botões/caixas internas (16-24px) sem
+    # soar alarme; só pega o padrão "de página completa" (normalmente 32px)
+    # que, num bloco, desperdiça parte da largura disponível.
+    grandes = [v for v in laterais if v > 24]
+    if grandes:
+        avisos.append(f"{len(grandes)} padding(s) lateral(is) acima de 24px (até {max(grandes)}px): num bloco, o texto deve aproveitar quase toda a largura — considere ~12px nas linhas de conteúdo (botões e caixas internas podem ficar com mais folga)")
+
+
+def checa_pagina_completa(sem_comentarios, erros, avisos):
+    """Checklist específico para uma PÁGINA COMPLETA (importada por URL no
+    RD Station): aqui a largura precisa ser px fixo, não %/auto — a
+    importação por URL do RD parece medir a página numa viewport
+    estreita e trava essa largura para todos os dispositivos depois."""
+    tag_card = achar_tabela_card(sem_comentarios)
+    if tag_card:
+        sm = re.search(r'style="([^"]*)"', tag_card, re.I)
+        estilo = sm.group(1).lower() if sm else ""
+        width_attr = re.search(r'\bwidth\s*=\s*"([^"]*)"', tag_card, re.I)
+        usa_percentual = "%" in estilo.split("max-width")[0] if "width" in estilo else False
+        usa_percentual = usa_percentual or (width_attr and "%" in width_attr.group(1))
+        sem_width_fixo = "width" not in estilo and not (width_attr and width_attr.group(1).strip("%").isdigit() and "%" not in width_attr.group(1))
+        if usa_percentual or sem_width_fixo:
+            avisos.append("tabela externa sem largura fixa em px (ex.: width=\"600\" + style=\"width:600px\"): em página completa, %/auto pode medir errado na importação por URL do RD e ficar apertada")
+
+
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
@@ -94,8 +202,15 @@ def main():
     kb = len(html.encode("utf-8")) / 1024
     if kb > 102:
         erros.append(f"HTML com {kb:.0f} KB: o Gmail corta a mensagem acima de ~102 KB")
-    if 'name="color-scheme"' not in html:
-        avisos.append('sem <meta name="color-scheme" content="light">: clientes em modo escuro podem inverter cores e logos')
+
+    sem_comentarios = re.sub(r"<!--.*?-->", "", html, flags=re.S)
+    is_bloco = "<html" not in sem_comentarios.lower()
+    if is_bloco:
+        checa_bloco(html, sem_comentarios, erros, avisos)
+    else:
+        if 'name="color-scheme"' not in html:
+            avisos.append('sem <meta name="color-scheme" content="light">: clientes em modo escuro podem inverter cores e logos')
+        checa_pagina_completa(sem_comentarios, erros, avisos)
 
     pasta = os.path.dirname(os.path.abspath(caminho))
     nome = os.path.splitext(os.path.basename(caminho))[0]
@@ -165,7 +280,8 @@ def main():
             html = html.replace(velho, novo)
         open(caminho, "wb").write(html.encode("utf-8"))
 
-    print(f"{caminho}: {len(p.imgs)} imagens, {len(p.links)} links, {kb:.0f} KB")
+    modo = "bloco" if is_bloco else "página completa"
+    print(f"{caminho} [{modo}]: {len(p.imgs)} imagens, {len(p.links)} links, {kb:.0f} KB")
     for e in erros:
         print("  ERRO  ", e)
     for a in avisos:
