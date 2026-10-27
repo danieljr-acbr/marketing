@@ -263,7 +263,7 @@ def main():
             avisos.append(f"linha {linha}: imagem com {len(data) // 1024} KB, considere reduzir: {src}")
 
     for href, linha in {h: l for l, h in p.links}.items():
-        if href.startswith(("mailto:", "tel:", "#")) or "*|" in href or "{{" in href:
+        if href.startswith(("mailto:", "tel:", "#")) or "*|" in href or "{{" in href or re.fullmatch(r"%[\w-]+%", href):
             continue
         if not href.startswith("https://"):
             avisos.append(f"linha {linha}: link sem https: {href}")
