@@ -8,8 +8,13 @@
   lugar.") precisa ser configurado no campo de preview/preheader do
   próprio RD Station, já que esse recurso depende de vir logo após o
   <body> — não dá pra reproduzir de dentro de um bloco de conteúdo.
+
+  Largura do card em 590px (não 600): o importador do RD soma 5px de
+  padding de cada lado por conta própria, então 590 + 5 + 5 = 600px
+  finais, como projetado.
 -->
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#FFFFFF" style="width:100%;max-width:600px;background:#FFFFFF;border-radius:12px;border:1px solid #E4E7EC;">
+<center>
+<table role="presentation" width="100%" align="center" cellpadding="0" cellspacing="0" border="0" bgcolor="#FFFFFF" style="width:100%;max-width:590px;background:#FFFFFF;border-radius:12px;border:1px solid #E4E7EC;">
 
 <!-- masthead -->
 <tr><td bgcolor="#1F3864" style="padding:24px 32px;background:#1F3864;background-image:linear-gradient(90deg,#16233F 0%,#1F3864 46%,#7A5A2B 82%,#F2A83B 100%);border-radius:12px 12px 0 0;">
@@ -117,3 +122,4 @@
 </td></tr>
 
 </table>
+</center>
